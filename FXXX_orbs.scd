@@ -1,10 +1,11 @@
 
 
-q.fxDir = thisProcess.nowExecutingPath.dirname;
-q.numOrbs = q.numOrbs ? 4;
+q.number_of_orbits = q.number_of_orbits ? 8;
 fork{
-    q.numOrbs.do{|i|
-        Ndef(format("orb%",i).asSymbol).addSpec(
+    ( q.number_of_orbits ).do { |i|
+        var j = i + 1; // orbit 1 won't have any fx
+        var orbit = format("orb%",j).asSymbol;
+        Ndef(orbit).addSpec(
             // /* soundIn --*/ \inchan, [ 0, 2, \lin, 1, 0 ], \mix, [ -1, 1, \lin, 0, -1 ],
             /* 00_in ----*/ \level, \ampx4.asSpec,
             /* bitcrush -*/ \brate, [44100.0, 44.1, \exp], \bits, [24, 2.4, \exp], \bpre, \ampx4.asSpec,
@@ -33,12 +34,12 @@ fork{
             \delta, [0, 20],
         );
         wait(0.1);
-        q.fx[format("orb%",i).asSymbol]  = ProxyChain.from( Ndef( format("orb%",i).asSymbol ),
+        q.fx[orbit]  = ProxyChain.from( Ndef( orbit ),
             [ '00_in'] ++ ['strobe', 'tape', 'wah', 'lfo', 'pitch', 'modelay'].scramble ++ [\hpf, \lpf, \ampFin]
         );
 
         wait(0.1);
-        Ndef( format("orb%",i).asSymbol ).set(
+        Ndef( orbit ).set(
             // /* soundIn */ \inchan, 0, \mix, -1,
             /* tape */ \trate, 0.25, \tphase, 0, \tdepth, 0.5, \toffset, 0.5,
             // /* hole */ \hrate, 0.5, \damp, 0.5, \hsize, 1, \hdif, 0.7, \hfb, 0,
@@ -52,25 +53,32 @@ fork{
             /* ampFin */ \limDrive, 1.25, \ampLimit, 1, \postAmp, 1,
             // \cps, 1
         );
-        q.fx[format("orb%",i).asSymbol].add('00_in', 1).add('ampFin', 1);
+        q.fx[orbit].add('00_in', 1).add('ampFin', 1);
         wait(0.1);
-    };
+        {
+            q.fx[orbit]
+            .gui(50)
+            .moveTo( 1920 / q.numOrbs - 50 * (j-2), 570 )
+        }.defer(1);    };
 
 };
 
 // Pró: good for liveCoding || Contra: dificult to access controlkeys.
 
+/*
+q.fxDir = thisProcess.nowExecutingPath.dirname;
 {
-    q.numOrbs.do{|i|
-        q.guiOrb1 = q.fx[format("orb%",i).asSymbol].gui(50).moveTo(500*i, 570);
-        q[format("o%Pset",i).asSymbol] = NdefPreset( format("orb%",i).asSymbol );
+    (q.numOrbs - 1).do{|i|
+        var j = i + 1;
+        q[format("orbGui%",j).asSymbol] = NdefGui( Ndef(format("orb%",j).asSymbol), 50).moveTo(1920 / q.numOrbs - 50 * i, 570);
+        q[format("o%Pset",j).asSymbol] = NdefPreset( format("orb%",j).asSymbol );
 
     };
+    q.fx.orb1.gui
     // q.guiOrb4 = q.fx.orb4.gui(8).moveTo(0, 0);
     /*q.o0Pset = NdefPreset( Ndef(\orb0) );
     q.o0Pset.loadSettings( q.fxDir ++ "/orb0.pxpreset.scd");
     q.o0PsetGui = NdefPresetGui(q.o0Pset, 40).moveTo(0, 570);*/
 
 }.defer(1);
-
-
+*/

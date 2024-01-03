@@ -21,9 +21,9 @@ fork{
                 wait(0.75);
                 // q[ (format("talVerb%",i).asSymbol) ].editor;
                 wait(0.75);
-                q[ (format("talVerb%",i).asSymbol) ].readProgram( format("/home/skmecs/vst/orb%verb.fxp",i).asString );
+                // q[ (format("talVerb%",i).asSymbol) ].readProgram( format("/home/skmecs/vst/orb%verb.fxp",i).asString );
                 wait(0.75);
-                q[ (format("roughRider%",i).asSymbol) ].readProgram( format("/home/skmecs/vst/roughRider%.fxp", i).asString );
+                // q[ (format("roughRider%",i).asSymbol) ].readProgram( format("/home/skmecs/vst/roughRider%.fxp", i).asString );
             }
         }
     );

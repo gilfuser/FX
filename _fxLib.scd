@@ -5,7 +5,7 @@ q.fx = q.fx ? ();
 
     ProxyChain.add3( '00_in', \filter -> { |in, level=0.85|
             LeakDC.ar( in * level.lag(0.2) )
-            + (BrownNoise.ar(0.000001) ! s.options.numOutputBusChannels );
+            + (BrownNoise.ar(0.000001) ! 2 /*s.options.numOutputBusChannels*/ );
         }, 1,
         ( level: \ampx4.asSpec )
     );
@@ -229,8 +229,8 @@ q.fx = q.fx ? ();
     );
 
     ProxyChain.add3( \verbPan, \filterIn -> { |in mix = 0.5 room = 0.5 damp = 0.5 pan = 0 |
-        var sig2v = PanAz.ar( s.options.numOutputBusChannels,  in, pan, 1, s.options.numOutputBusChannels );
-        PanAz.ar( s.options.numOutputBusChannels,  FreeVerb.ar(in, mix, room, damp), pan, 1, s.options.numOutputBusChannels );
+        var sig2v = PanAz.ar( 2,  in, pan, 1, 2 );
+        PanAz.ar( 2,  FreeVerb.ar(in, mix, room, damp), pan, 1, 2 );
     }, 1,
     ( [
         mix: [0,1],

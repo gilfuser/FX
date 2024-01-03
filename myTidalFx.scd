@@ -18,7 +18,9 @@ SynthDef("greyhole" ++ ~dirt.numChannels, { | out htime = 1 hdamp = 0.5 hsize = 
 }).add;
 );
 */
+var numChannels = ~dirt.numChannels;
 
+if (currentEnvironment.class == ProxySpace) {p.pop};
 (
 ~dirt.addModule('saturator', { |dirtEvent|
 	dirtEvent.sendSynth('saturator' ++ ~dirt.numChannels,
@@ -155,42 +157,7 @@ SynthDef("skm-filter" ++ ~dirt.numChannels, { | out lbhnp = 0 sfreq = 10000 fres
 );
 */
 
-/*(
-~dirt.addModule('skm-wah', { |dirtEvent|
-	dirtEvent.sendSynth('skm-wah' ++ ~dirt.numChannels,
-		/*
-		[
-			wrate: ~wrate,
-			wdepth: ~wdepth,
-			wring: ~wring,
-			sinsaw: ~sinsaw,
-			wphase: ~wphase,
-			wrq: ~wrq,
-			wgain: ~wgain,
-			wwah: ~wwah,
-			cps: ~cps,
-			cycle: ~cycle,
-			sustain: ~sustain,
-			out: ~out
-		]
-		*/
-	)
-}, { ( ~wrate.notNil ) or: { ~wdepth.notNil } or: { ~wring.notNil } or: { ~sinsaw.notNil } or: { ~wphase.notNil }  or: { ~wrq.notNil } or: { ~wgain.notNil } or: { ~wwah.notNil } });
-);
-(
-SynthDef("skm-wah" ++ ~dirt.numChannels, { | out wrate = 1 wdepth = 0.5 wring=0.015, sinsaw=0, wphase = 0, wrq = 0.8, wgain = 1 wwah = 1  cps = -1 cycle = -1 sustain |
-	var signal, ringz, wahed, drywet;
-	var mod = Select.kr(sinsaw, [
-			SinOsc.ar( wrate, ( wphase * 2pi) % 2pi, wdepth).exprange(100, 5000),
-			VarSaw.kr(wrate, wphase, 0.1, wdepth).lag(0.1).exprange(100, 5000),
-		]);
-	signal = In.ar(out, ~dirt.numChannels);
-	ringz = Ringz.ar( signal, mod, wring );
-	wahed = RLPF.ar(ringz, mod, wrq.lag(0.1)) * wgain.tanh.lag(0.0003) / wgain.sqrt;
-	drywet = XFade2.ar(signal, wahed, wwah * 2 - 1);
-	ReplaceOut.ar(out, drywet)
-}).add;
-);*/
+
 
 (
 ~dirt.addModule('skm-comp', { |dirtEvent|
@@ -235,4 +202,91 @@ d1 $ sound "can*4" # tsdelay "0 0.25 0.5 0.75 1" # xsdelay "3 124 3 12 62 2"
 
 
 */
+
+
+// these are the global effects on each orbit
+~dirt.orbits.do { |x| x.globalEffects.postln };
+
+// first you generate the synth defs for it
+(
+(1..SuperDirt.maxSampleNumChannels).do { |numChannels|
+	SynthDef("dirt_global_modelay" ++ numChannels, { |dryBus, effectBus, gate = 1, modelay = 0, mdfb = 0.5, mdtime = 1, mdtimel = 1.5, mdtimer = 1, mdlock = 0, mdff = 800, mdfq = 3, mdamp = 1|
+		var decaytime, decaytimeL, decaytimeR;
+        var delayL, delayR, timeMod, eqMod;
+        var maxDelayTime = 4;
+		var signal = In.ar(dryBus, numChannels);
+		mdamp = mdamp.clip(0, 4);
+            mdfb = mdfb.clip(0, 0.99);
+            mdtime = mdtime * if( mdlock, reciprocal(TempoClock.default.tempo), 1 );
+            mdtime = mdtime.clip(0.014, maxDelayTime);
+            decaytime = log2(-60.dbamp) / log2(mdfb) * mdtime;
+            decaytime = decaytime.clip(0, 20);
+            mdtimel = mdtimel * if(mdlock, reciprocal(TempoClock.default.tempo ), 1);
+            mdtimel = mdtimel.clip(0.014, maxDelayTime); // just to be sure
+            mdtimer = mdtimer * if(mdlock, reciprocal(TempoClock.default.tempo ), 1);
+            mdtimer = mdtimer.clip(0.014, maxDelayTime);
+            decaytimeL = log2(-60.dbamp) / log2(mdfb) * mdtimel;
+            decaytimeL = decaytimeL.clip(0, 20);
+            decaytimeR = log2(-60.dbamp) / log2(mdfb) * mdtimer;
+            decaytimeR = decaytimeR.clip(0, 20);
+
+            timeMod = { LFDNoise3.ar(5.5, 0.001) };
+            eqMod = { LFDNoise3.kr(1, 0.25, 1) };
+
+            signal = signal + (( [ LocalIn.ar(2)[0] * mdtimel.lincurve(0, 4, 0, 1, -16), LocalIn.ar(2)[1] * mdtimer.lincurve(0, 4, 0, 1, -16) ] )*modelay);
+
+            delayL = CombC.ar( signal[0], maxDelayTime, mdtimel + timeMod, decaytimeL );
+            delayL = BBandPass.ar( delayL, mdff.lag(0.1) * eqMod, mdfq.lag(0.1) );
+
+            delayR = CombC.ar(signal[1], maxDelayTime, mdtimer + timeMod, decaytimeR );
+            delayR = BBandPass.ar( delayR, mdff.lag(0.1) * eqMod, mdfq.lag(0.1) );
+
+            signal = Limiter.ar( [ delayL, delayR] * mdamp.lag(0.01) );
+        LocalOut.ar( AllpassN.ar(mdfb * signal, maxDelayTime, delaytime: mdtime /* + timeMod */ , decaytime: decaytime) );
+        // signal;
+		signal = signal * EnvGen.kr(Env.asr, gate, doneAction:2);
+		DirtPause.ar(signal.sum, graceTime:4);
+		XOut.ar(effectBus, modelay, signal)
+	}).add;
+};
+);
+
+(
+(1..SuperDirt.maxSampleNumChannels).do { |numChannels|
+	SynthDef("dirt_global_wah" ++ numChannels, { |dryBus, effectBus, gate = 1, wrate = 1, wdepth = 0.5, sinsaw = 0, wphase = 0, jrate = 1, jdepth = 0, wah = 0|
+		var  wring = 0.002, wrq = 0.8, ggain = 1.25;
+        var jitter = LFNoise2.ar(jrate, jdepth);
+        var mod = Select.kr(sinsaw, [
+            SinOsc.ar( wrate, ( jitter * 2pi) % 2pi, wdepth).exprange(100, 5000),
+            VarSaw.kr(wrate, jitter, 0.1, wdepth).lag(0.1).exprange(100, 5000),
+        ]);
+		var signal = In.ar(dryBus, numChannels);
+        var ringz = Ringz.ar( signal, mod, wring );
+        signal = RLPF.ar(ringz, mod, wrq.lag(0.1)) * ggain.tanh.lag(0.0003) / ggain.sqrt;
+        signal = signal * EnvGen.kr(Env.asr, gate, doneAction:2);
+		DirtPause.ar(signal, graceTime:4);
+		XOut.ar(effectBus, wah, signal)
+	}).add;
+};
+);
+
+(
+~dirt.orbits.do { |x, i|
+	fork{
+        // i.postln;
+	x.globalEffects = ~dirt.orbits[i].globalEffects.addFirst(
+		GlobalDirtEffect(\dirt_global_wah, [\wah, \wrate, \wdepth, \sinsaw, \wphase, \jrate, \jdepth ])
+	);
+    wait(0.2);
+        x.globalEffects = ~dirt.orbits[i].globalEffects.addFirst(
+		GlobalDirtEffect(\dirt_global_modelay, [\modelay, \mdfb, \mdtime, \mdtimel, \mdtimer, \mdlock, \mdff, \mdfq, \mdamp])
+	);
+~dirt.orbits[i].initNodeTree;}
+};
+);
+
+~dirt.orbits.do { |x| x.globalEffects.postln; " ----------".postln; };
+
+
+
 ">>> My Tidal FX loaded\n".postString

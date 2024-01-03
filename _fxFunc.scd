@@ -1,16 +1,15 @@
-q = q ? ();
-
 (
-q.fx = /*q.fxf ?*/ (
+q = q ? ();
+t = t ?? TempoClock.default;
+q.fx = (
 
-    bitcrush: { |in bpre=1 brate=2250 bits=12|
-        var sig = ( in * bpre ).softclip;
-        Decimator.ar( sig, brate, (bits).floor );
+    bitcrush: { |in, bpre=1, brate=2250, bits=12, amp=0.2|
+        Decimator.ar( SoftClipAmp4.ar( in, bpre, amp ).softclip, brate, (bits).floor );
     },
 
-    tape: { |in trate=0.25 tphase=1.5 tdepth=0.25 toffset=0.25|
+    tape: { |in, trate=0.25, tphase=1.5, tdepth=0.25, toffset=0.25|
         var curve = SinOsc.ar(
-            ( trate * { l.tempo } ),
+            ( trate * { t.tempo } ),
             ( tphase * 2pi + 1.5pi) % 2pi,
             tdepth, toffset
         );
@@ -19,7 +18,7 @@ q.fx = /*q.fxf ?*/ (
 
     wah: { |in, wrate = 1, wdepth = 0.5, jrate = 0.125, jdepth = 0.125, sinsaw = 0 |
         var  wring = 0.002, wrq = 0.8,  ggain = 1.25 ;
-        var jitter = LFNoise2.ar( jrate, jdepth);
+        var jitter = LFDNoise3.ar( jrate, jdepth);
         var mod = Select.kr( sinsaw, [
             SinOsc.ar( wrate, ( jitter * 2pi) % 2pi, wdepth).exprange(100, 5000),
             VarSaw.kr(wrate, jitter, 0.1, wdepth).lag(0.1).exprange(100, 5000),
@@ -39,7 +38,7 @@ q.fx = /*q.fxf ?*/ (
     },
 
     lfo: { | in,  lrate = 0.0125, iphase = 0, lwidth = 0.5, sisap = 0, hifreq = 20000, midfreq = 60 |
-        var tempo = ( lrate * l.tempo );
+        var tempo = ( lrate * t.tempo );
         var mod = Select.ar( sisap, [
             SinOsc.ar( tempo, ( lrate *  iphase * 2pi + 1.5pi ) % 2pi ),
             LFSaw.ar( tempo, iphase % 2, lwidth ), // change to LFTri
@@ -47,8 +46,6 @@ q.fx = /*q.fxf ?*/ (
         ] );
         BLowPass.ar( in, mod.lag2(0.05).exprange( midfreq, hifreq ) );
     },
-
-
 
     hpf: { |in hff=320 hrq=1|
         BHiPass.ar( in, hff, hrq );
@@ -71,20 +68,20 @@ q.fx = /*q.fxf ?*/ (
         FreeVerb.ar(in, vmix, vroom, vdamp)
     },
 
-    modelay: { | in mdfb=0.5 mdtime=1 mdtimel=1.5 mdtimer=1 mdlock=0 mdff=800 mdfq=3 mdamp=1 |
+    modelay: { | in, mdfb=0.5, mdtime=1, mdtimel=1.5, mdtimer=1, mdlock=0, mdff=800, mdfq=3, mdamp=1 |
         var decaytime, decaytimeL, decaytimeR, delayL, delayR, timeMod, eqMod;
         var maxDelayTime = 4;
         var signal = in;
 
         // in = if(numChannels > 2) { in.clump(2).sum } { in.dup };
         mdfb = mdfb.clip(0, 0.99);
-        mdtime = mdtime * if( mdlock, reciprocal( l.tempo ), 1 );
+        mdtime = mdtime * if( mdlock, reciprocal( t.tempo ), 1 );
         mdtime = mdtime.clip(0.014, maxDelayTime);
         decaytime = log2(-60.dbamp) / log2(mdfb) * mdtime;
         decaytime = decaytime.clip(0, 20);
-        mdtimel = mdtimel * if(mdlock, reciprocal( l.tempo ), 1);
+        mdtimel = mdtimel * if(mdlock, reciprocal( t.tempo ), 1);
         mdtimel = mdtimel.clip(0.014, maxDelayTime); // just to be sure
-        mdtimer = mdtimer * if(mdlock, reciprocal( l.tempo ), 1);
+        mdtimer = mdtimer * if(mdlock, reciprocal( t.tempo ), 1);
         mdtimer = mdtimer.clip(0.014, maxDelayTime);
         decaytimeL = log2(-60.dbamp) / log2(mdfb) * mdtimel;
         decaytimeL = decaytimeL.clip(0, 20);
@@ -108,85 +105,116 @@ q.fx = /*q.fxf ?*/ (
     },
 
     leakDC: { |in leak=0.99| LeakDC.ar(in, leak ) },
-)
 );
+//q.fx.keys.asArray.sort
+q.fx.keys.asArray.sort;
 q.fx.know = true;
+);
 
-q.fx[\modelay].addSpec(
+Spec.add(
+// modelay
     \mdtime, [0,4],
     \mdtimel, [0,4],
     \mdtimer, [0,4],
     \mdfb, [0,1],
     \mdlock, [0,1,\lin,1],
-    \mdff, [42,4200, \exp]
-);
-q.fx[\modelay].addSpec( \mdfq, [0.3, 3],\mdamp, \ampx4.asSpec );
-
-q.fx[\wah].addSpec(
+    \mdff, [42,4200, \exp],
+    \mdfq, [0.3, 3],
+    \mdamp, \ampx4.asSpec,
+// wah
     \wrate, [0, 8, \lin],
     \wdepth, [0, 1],
     \jrate, [0.1,10,\exp],
     \jdepth, [0,1],
-    \sinsaw, [0, 1, \lin, 1, 0]
-);
-
-q.fx[\lfo].addSpec(
+    \sinsaw, [0, 1, \lin, 1, 0],
+// lfo
     \sisap, [ 0, 2, 1, 1 ],
     \hifreq, [ 200, 20000, \exp ],
     \iphase, [ 0.001, 1, \exp, 0, 0.5 ],
     \lwidth, [ 0, 1 ],
-    \lrate, [ 0, 16, \lin, 0.125, 1 ]
-);
-
-q.fx[\pitch].addSpec(
+    \lrate, [ 0, 16, \lin, 0.125, 1 ],
+// pitch
     \pdisp, [0, 0.5],
     \tdisp, [0, 1],
     \slide, [0.02, 2],
-    \deg, [-36, 36, \lin, 1, 0]
-);
-
-q.fx[\hpf].addSpec(
+    \pdeg, [-36, 36, \lin, 1, 0],
+// hpf
     \hff, [20, 10000, \exp, 0, 320],
     \hff, [20, 10000, \exp],
     \hrq, \qr.asSpec,
-);
-
-q.fx[\lpf].addSpec( \lff, [40, 20000, \exp], \lrq, \qr.asSpec );
-
-q.fx[\bitcrush].addSpec(
+// lpf
+    \lff, [40, 20000, \exp], \lrq, \qr.asSpec,
+// bitcrush
     \brate, [44100,44.1,\exp],
     \bpre, \ampx4.asSpec,
-    \bits, [24,2.4,\exp]
-);
-
-q.fx[\tape].addSpec(
+    \bits, [24,2.4,\exp],
+// tape
     \trate, [ 0.125, 4, \lin, 0.125, 1],
     \tphase, [0, 2],
     \tdepth, [0.001,1],
-    \toffset, [0, 1]
+    \toffset, [0, 1],
+// leakDC
+    \leak, [0.5,0.999,\exp],
+// verb
+    \vmix, [0,1],
+    \vdamp, [0,1],
+    \vroom, [0,1],
 );
 
-q.fx[\leakDC].addSpec( \leak, [0.5,0.999,\exp] );
-
-q.fx[\verb].addSpec( \vmix, [0,1], \vdamp, [0,1], \vroom, [0,1] );
-
 (
-q.printFxFuncs = {
+q.printFx = {
     q.fx.keysValuesDo{ |key val|
         q[key.asSymbol] = val;
         postf("% -> ", key);
         q.fx[key.asSymbol].argNames.do {|n, i|
             if (n != \in) {
                 postf("% %, ", n, q.fx[key.asSymbol].defaultArgs[i]);
-                //
-		}
+            }
         };
-        "\n".postln;
+
+    n.postln;
     };
     ">>>> q.fx.foo = q.foo\n".postString;
     '';
 };
-q.printFxFuncs;
+q.printFx;
 );
 '';
-"FX Lib -> Functions - check with q.printFxFuncs\n ".postString;
+"FX Lib -> Functions - check with q.printFx\n ".postString;
+
+/*FZFSC.new(
+    name: "post_fx_funcs",
+    itemsCode: "q.fx.keys.asArray.sort",
+    callbackFunc: [[{
+        // var fxName = "%s";
+        (%s.asString ++ '_->_'.asString);
+        q.fx[%s.asSymbol].argNames.do {|n, i|
+            if (n != 'in'.asSymbol) {
+                (n.asString ++ '_'.asString ++ q.fx[%s.asSymbol].defaultArgs[i] ++ ',_'.asString);
+            }
+        };
+        '\n'.asString.postln;
+    }]]
+);
+
+(q[\wah].argNames).postln
+(\wah.asString ++ " ->").post
+FZFSC.new(
+    name: "test",
+    itemsCode: "[0,0.1,'atest']",
+    callbackFunc: "\"%s\".postln "
+);
+FZFSC.new(
+	// The name of your finder. You can invoke it in NeoVim by running the following command in nvim:
+	// :SCNvimExt fzf-sc.fuzz numberlister
+	// And additionally, it is available in the main list of finders:
+	// :SCNvimExt fzf-sc.fuzz
+	name: "numberl",
+
+	// A piece of SuperCollider code that returns an array of some things that we can fuzzy find over
+	itemsCode: "[1,5,2,4,3,9,666]",
+
+	// A formatted string containing a piece of SuperCollider code.
+	// The %s bit will be replaced with the item you chose from the array above.
+	callbackFunc: "%s.postln"
+);*/
